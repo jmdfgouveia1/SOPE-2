@@ -3,15 +3,17 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <math.h>
+#include <errno.h>
+#include <limits.h>
 
 
 typedef unsigned long QueueElem;
-unsigned int listSize;
+signed long listSize;
 int* primes;
 unsigned int nth;
 unsigned int inc;
+int QUEUESIZE =10;
 sem_t ter;
-pthread_mutex_t nthmu =PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t lismu =PTHREAD_MUTEX_INITIALIZER;
 
 typedef struct{
@@ -28,16 +30,27 @@ typedef struct{
 // Initializes semaphores & mutex needed to implement the producer-consumer paradigm
 // Initializes indexes of the head and tail of the queue
 // TO DO BY STUDENTS: ADD ERROR TESTS TO THE CALLS & RETURN a value INDICATING (UN)SUCESS
-void queue_init(CircularQueue **q, unsigned int capacity) // TO DO: change return value
-{
+int queue_init(CircularQueue **q, unsigned int capacity) // TO DO: change return value
+{	
+	if(capacity<=1){
+printf("Error in queue capacity \n It should be bigger than 1 \n");
+exit(1);
+	}
 	*q = (CircularQueue *) malloc(sizeof(CircularQueue));
-	sem_init(&((*q)->empty), 0, capacity);
-	sem_init(&((*q)->full), 0, 0);
+	if(sem_init(&((*q)->empty), 0, capacity)==-1){
+		printf("Error with sem_init\n");
+		exit(2);
+	}
+	if(sem_init(&((*q)->full), 0, 0)==-1){
+		printf("Error with sem_init\n");
+		exit(3);
+	}
 	pthread_mutex_init(&((*q)->mutex), NULL);
 	(*q)->v = (QueueElem *) malloc(capacity * sizeof(QueueElem));
 	(*q)->capacity = capacity;
 	(*q)->first = 0;
 	(*q)->last = 0;
+	return 0;
 }
 //------------------------------------------------------------------------------------------
 // Inserts 'value' at the tail of queue 'q'
@@ -48,7 +61,7 @@ void queue_put(CircularQueue *q, QueueElem value)
 	pthread_mutex_lock(&q->mutex);
 	q->v[q->last]=value;
 	q->last++;
-	if(q->last==10){
+	if(q->last==QUEUESIZE){
 		q->last=0;
 	}
 	pthread_mutex_unlock(&q->mutex);
@@ -64,7 +77,7 @@ QueueElem queue_get(CircularQueue *q)
 	pthread_mutex_lock(&q->mutex);
 	QueueElem qtemp = q->v[q->first];
 	q->first++;
-	if(q->first==10){
+	if(q->first==QUEUESIZE){
 		q->first=0;
 	}
 	
@@ -111,13 +124,13 @@ void* filter(void* q){
 	else{
 
 		CircularQueue* q2;
-		queue_init(&q2,10);
+		queue_init(&q2,QUEUESIZE);
 		pthread_t tid2;
 		pthread_create(&tid2,NULL,filter,q2);
 	//	printf("thread created \n");
-		pthread_mutex_lock(&nthmu);
+		pthread_mutex_lock( &lismu);
 		nth++;
-		pthread_mutex_unlock(&nthmu);
+		pthread_mutex_unlock( &lismu);
 		while(c1!=0){
 			if(c1%prm!=0){
 				queue_put(q2,c1);
@@ -129,7 +142,7 @@ void* filter(void* q){
 
 		}
 	
-
+		
 	queue_put(q2,0);
 	pthread_mutex_lock(&lismu);
 	primes[inc]=prm;
@@ -137,9 +150,10 @@ void* filter(void* q){
 	inc++;
 pthread_mutex_unlock(&lismu);
 	}
-	pthread_mutex_lock(&nthmu);
+	pthread_mutex_lock( &lismu);
 	nth--;
-	pthread_mutex_unlock(&nthmu);
+	pthread_mutex_unlock( &lismu);
+	queue_destroy(	q);
 	return NULL;
 }
 
@@ -147,14 +161,21 @@ pthread_mutex_unlock(&lismu);
 void * first(void* q){
 	int i;
 
+
+if(listSize==2){
+	primes[inc]=2;
+	inc++;
+	sem_post(&ter);
+	return NULL;
+}
 	CircularQueue* q2;
-	queue_init(&q2,10);
+	queue_init(&q2,QUEUESIZE);
 	pthread_t tid2;
 	pthread_create(&tid2,NULL,filter,q2);
 	//printf("thread created \n");
-	pthread_mutex_lock(&nthmu);
+	pthread_mutex_lock( &lismu);
 	nth++;
-	pthread_mutex_unlock(&nthmu);
+	pthread_mutex_unlock( &lismu);
 	for(i=3;i<=listSize;i+=2){
 		queue_put(q2,i);
 		//printf(" a thr 1 vai por %d \n",i);
@@ -166,9 +187,9 @@ void * first(void* q){
 	inc++;
 	pthread_mutex_unlock(&lismu);
 	//	printf("acabada thread com o primo inicial %d \n",2);
-	pthread_mutex_lock(&nthmu);
+	pthread_mutex_lock( &lismu);
 	nth--;
-	pthread_mutex_unlock(&nthmu);
+	pthread_mutex_unlock( &lismu);
 	return NULL;
 }
 
@@ -176,12 +197,21 @@ int cmpfunc (const void * a, const void * b)
 {
    return ( *(int*)a - *(int*)b );
 }
+
 int main(int argc, char *argv[]){
 	listSize= strtol(argv[1], NULL, 0);
+	
+ if(listSize<=1 || listSize==LONG_MIN || listSize==LONG_MAX || listSize==ERANGE || argc>2)
+ {
+  printf(" Right use of function : ./primes <number> \n Where number is higher than 1\n");
+  return -1;
+}
+
 	nth=0;
 	inc=0;
 	sem_init(&ter, 0, 0);
-	primes = (int*) malloc(ceil(1.2*listSize/log(listSize)*sizeof(int)));
+	primes = (int*) malloc((ceil(1.2*listSize/log(listSize)+1)*sizeof(int)));
+
 
 	pthread_t tid;
 	pthread_create(&tid,NULL,first,NULL);
@@ -191,6 +221,9 @@ int main(int argc, char *argv[]){
 	//printf("last element %d \n",primes[inc]);
 	qsort(primes,inc,sizeof(int),cmpfunc);
 	for(l=0;l<inc;l++)
-		printf("primo : %d \n",primes[l]);
+		printf("  %d \n",primes[l]);
+
+
+
 	return 0;
 }
