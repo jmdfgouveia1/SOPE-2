@@ -201,7 +201,7 @@ int cmpfunc (const void * a, const void * b)
 int main(int argc, char *argv[]){
 	listSize= strtol(argv[1], NULL, 0);
 	
- if(listSize<=1 || listSize==LONG_MIN || listSize==LONG_MAX || listSize==ERANGE || argc>2)
+ if(listSize<=1 || listSize==LONG_MIN || listSize==LONG_MAX  || argc>2)
  {
   printf(" Right use of function : ./primes <number> \n Where number is higher than 1\n");
   return -1;
